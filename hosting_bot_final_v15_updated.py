@@ -67,7 +67,7 @@ def keep_alive():
 # ================================
 # 𝐂𝐎𝐍𝐅𝐈𝐆𝐔𝐑𝐀𝐓𝐈𝐎𝐍
 # ================================
-TOKEN = os.environ.get('BOT_TOKEN', '8776958017:AAFLiq_MZ11ADeqgmbIcpe4Uk8ngz67NLdE')
+TOKEN = os.environ.get('BOT_TOKEN', '8645072205:AAEuSog3P47DArjzVWDZktYj_uCLyv-TTqc')
 OWNER_ID = int(os.environ.get('OWNER_ID', '8739344756'))
 ADMIN_ID = OWNER_ID
 
