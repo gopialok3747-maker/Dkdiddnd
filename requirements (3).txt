@@ -1,0 +1,10 @@
+Flask>=3.0,<4
+pyTelegramBotAPI>=4.27,<5
+psutil>=6,<8
+requests>=2.31,<3
+qrcode>=8,<9
+Pillow>=10,<13
+cryptography>=42,<46
+httpx[http2]>=0.27,<1
+aiofiles>=24,<26
+anyio>=4,<5
