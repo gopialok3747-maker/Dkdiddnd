@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FINAL HYBRID SMS PANEL MONITOR + TELEGRAM BOT
-Fixed for Railway (Database & Folder Creation)
+Profex (site.je) Link Support Add Kar Diya
 """
 
 import os
@@ -19,11 +19,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # =====================================================================
-# BASE DIR & FOLDER CREATION (FIX FOR RAILWAY ERROR)
+# BASE DIR & FOLDER CREATION
 # =====================================================================
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)  # Yeh line 'data' folder create karegi
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # =====================================================================
 # CONFIG
@@ -79,7 +79,6 @@ async def init_db():
         await db.commit()
     except Exception as e:
         print(f"Database Error: {e}")
-        # Agar database fail ho, toh fallback memory mein use karo taaki bot atke nahi
         db = None
 
 async def db_get(sql, params=()):
@@ -181,12 +180,36 @@ def decode_zxkai(link):
         return obj.get("u", ""), obj.get("k", "")
     except: return None
 
+def decode_profex(link):
+    # Profex decoder (site.je)
+    m = re.search(r"s=([^&]+)", link)
+    if not m:
+        return None
+    s = m.group(1)
+    b64 = s.replace("-", "+").replace("_", "/")
+    b64 += "=" * (-len(b64) % 4)
+    try:
+        raw = base64.b64decode(b64)
+        txt = raw.decode("utf-8", errors="replace")
+        parts = txt.split("|||")
+        url = parts[0].strip()
+        key = parts[1].strip() if len(parts) > 1 else ""
+        if url.startswith("http"):
+            return url, key
+    except:
+        return None
+
 def parse_panel_link(link):
     link = link.strip().strip("<>")
     d = decode_zxkai(link)
-    if d and d[0] and d[1]: return d
+    if d and d[0] and d[1]:
+        return d
+    d = decode_profex(link)
+    if d and d[0]:
+        return d
     m = re.search(r"(https://[^/?]+firebaseio\.com)", link)
-    if not m: return None
+    if not m:
+        return None
     url = m.group(1)
     auth = re.search(r"auth=([A-Za-z0-9_\-]+)", link)
     return url, (auth.group(1) if auth else "")
@@ -199,20 +222,24 @@ def label_from_url(url):
 # BOT KEYBOARDS
 # =====================================================================
 def main_keyboard(user_id):
-    kb = [[{"text": "📊 Status", "callback_data": "status"}],
-          [{"text": "📋 My Panels", "callback_data": "mypanels"}],
-          [{"text": "➕ Add Panel", "callback_data": "add"}],
-          [{"text": "❌ Remove Panel", "callback_data": "remove"}]]
+    kb = [
+        [{"text": "📊 Status", "callback_data": "status", "style": "primary"}],
+        [{"text": "📋 My Panels", "callback_data": "mypanels", "style": "primary"}],
+        [{"text": "➕ Add Panel", "callback_data": "add", "style": "success"}],
+        [{"text": "❌ Remove Panel", "callback_data": "remove", "style": "danger"}],
+    ]
     if is_admin(user_id):
-        kb.append([{"text": "👥 User Management", "callback_data": "user_mgmt"}])
-        kb.append([{"text": "📊 Admin Dashboard", "callback_data": "admin_dashboard"}])
+        kb.append([{"text": "👥 User Management", "callback_data": "user_mgmt", "style": "primary"}])
+        kb.append([{"text": "📊 Admin Dashboard", "callback_data": "admin_dashboard", "style": "primary"}])
     return kb
 
 def admin_keyboard():
-    return [[{"text": "📋 Pending Requests", "callback_data": "pending_requests"}],
-            [{"text": "👥 Approved Users", "callback_data": "approved_users"}],
-            [{"text": "➕ Add Admin", "callback_data": "add_admin"}],
-            [{"text": "🔙 Back", "callback_data": "back"}]]
+    return [
+        [{"text": "📋 Pending Requests", "callback_data": "pending_requests", "style": "primary"}],
+        [{"text": "👥 Approved Users", "callback_data": "approved_users", "style": "primary"}],
+        [{"text": "➕ Add Admin", "callback_data": "add_admin", "style": "success"}],
+        [{"text": "🔙 Back", "callback_data": "back", "style": "primary"}],
+    ]
 
 # =====================================================================
 # BOT USERS & COMMANDS
@@ -227,7 +254,7 @@ async def cmd_start(chat_id, message_id):
         if str(chat_id) in pending:
             await send(chat_id, "⏳ Request pending hai babu! Admin approve karega.", reply_to=message_id)
             return
-        kb = [[{"text": "📨 Request Access", "callback_data": "request_access"}]]
+        kb = [[{"text": "📨 Request Access", "callback_data": "request_access", "style": "primary"}]]
         await send(chat_id, f"🔒 <b>Ghare Jake Sutt Babu!</b>\n\nYe bot sirf authorized users ke liye hai.\n\n🆔 Your ID: <code>{chat_id}</code>\n\nNeeche button dabao aur access request karo.", keyboard=kb, reply_to=message_id)
         return
     await send(chat_id, "🤖 <b>Hybrid SMS Panel Monitor</b>\n\n✅ 200+ Panels Supported\n✅ Real-time Promo Detection\n\nButtons use karo babu!", keyboard=main_keyboard(chat_id))
@@ -235,7 +262,10 @@ async def cmd_start(chat_id, message_id):
 async def handle_status(chat_id, message_id):
     status = load_json(STATUS_PATH, {})
     text = f"📊 <b>LIVE DASHBOARD</b>\n\n📡 Panels: {status.get('panels_total', 0)}\n📦 Devices: {status.get('devices_total', 0)}\n🟢 Online: {status.get('devices_online', 0)}\n📨 Messages: {status.get('messages_detected', 0)}\n📩 Sent: {status.get('messages_sent', 0)}\n\n⚡ Success Rate: {status.get('requests_total', 0) - status.get('requests_failed', 0)}/{status.get('requests_total', 0)}"
-    kb = [[{"text": "🔄 Refresh", "callback_data": "refresh"}], [{"text": "🔙 Back", "callback_data": "back"}]]
+    kb = [
+        [{"text": "🔄 Refresh", "callback_data": "refresh", "style": "primary"}],
+        [{"text": "🔙 Back", "callback_data": "back", "style": "primary"}]
+    ]
     await edit(chat_id, message_id, text, kb)
 
 async def handle_admin_dashboard(chat_id, message_id):
@@ -245,7 +275,10 @@ async def handle_admin_dashboard(chat_id, message_id):
     pending = load_pending()
     panels = load_panels()
     text = f"👑 <b>ADMIN COMMAND DECK</b>\n━━━━━━━━━━━━━━━━━━━━\n📊 <b>SYSTEM</b>\n{status.get('panels_total', 0)} Panels • {status.get('devices_total', 0)} Devices\n\n👥 <b>USERS</b>\n{len(approved)} Approved • {len(pending)} Pending\n\n📨 <b>ACTIVITY</b>\n{status.get('messages_detected', 0)} Detected • {status.get('messages_sent', 0)} Processed\n\n🟢 <b>HEALTH</b>\n{max(0, int((status.get('requests_total', 0) - status.get('requests_failed', 0)) / max(status.get('requests_total', 1), 1) * 100))}% System Health\n\n━━━━━━━━━━━━━━━━━━━━\n👑 <b>Super Admin:</b> Ghare Jake Sutt Babu! 😆"
-    kb = [[{"text": "🔄 Refresh", "callback_data": "admin_dashboard"}], [{"text": "🔙 Back", "callback_data": "back"}]]
+    kb = [
+        [{"text": "🔄 Refresh", "callback_data": "admin_dashboard", "style": "primary"}],
+        [{"text": "🔙 Back", "callback_data": "back", "style": "primary"}]
+    ]
     await edit(chat_id, message_id, text, kb)
 
 async def handle_mypanels(chat_id, message_id):
@@ -262,15 +295,17 @@ async def handle_add(chat_id, message_id):
     state = load_state()
     state[str(chat_id)] = "add"
     save_state(state)
-    await edit(chat_id, message_id, "➕ <b>Add Panel</b>\n\nPanel link bhejo babu!", [[{"text": "🔙 Back", "callback_data": "back"}]])
+    await edit(chat_id, message_id, "➕ <b>Add Panel</b>\n\nPanel link bhejo babu!", [[{"text": "🔙 Back", "callback_data": "back", "style": "primary"}]])
 
 async def handle_remove(chat_id, message_id):
     panels = load_panels()
     if not panels:
         await edit(chat_id, message_id, "📭 No panels!", main_keyboard(chat_id))
         return
-    kb = [[{"text": f"❌ {i}. {name[:28]}", "callback_data": f"rm:{i}"}] for i, name in enumerate(panels.keys(), 1)]
-    kb.append([{"text": "🔙 Back", "callback_data": "back"}])
+    kb = [
+        [{"text": f"❌ {i}. {name[:28]}", "callback_data": f"rm:{i}", "style": "danger"}] for i, name in enumerate(panels.keys(), 1)
+    ]
+    kb.append([{"text": "🔙 Back", "callback_data": "back", "style": "primary"}])
     await edit(chat_id, message_id, "❌ <b>Remove Panel</b>", kb)
 
 async def handle_user_management(chat_id, message_id):
@@ -288,9 +323,11 @@ async def handle_pending(chat_id, message_id):
         return
     kb = []
     for uid, info in list(pending.items())[:10]:
-        kb.append([{"text": f"✅ Approve {uid[:6]}", "callback_data": f"approve:{uid}"},
-                   {"text": f"❌ Reject {uid[:6]}", "callback_data": f"reject:{uid}"}])
-    kb.append([{"text": "🔙 Back", "callback_data": "user_mgmt"}])
+        kb.append([
+            {"text": f"✅ Approve {uid[:6]}", "callback_data": f"approve:{uid}", "style": "success"},
+            {"text": f"❌ Reject {uid[:6]}", "callback_data": f"reject:{uid}", "style": "danger"}
+        ])
+    kb.append([{"text": "🔙 Back", "callback_data": "user_mgmt", "style": "primary"}])
     await edit(chat_id, message_id, "⏳ <b>Pending Requests</b>", kb)
 
 async def request_access(chat_id, username, first_name):
@@ -306,7 +343,7 @@ async def request_access(chat_id, username, first_name):
     save_pending(pending)
     await send(chat_id, "📨 <b>Access Request Sent!</b>\n\nTumhara request admin ke paas bhej diya hai.\nApprove hote hi notification milega.\n\nThoda sabar rakho babu! 😊")
     text = f"🆕 <b>Naya Access Request Aaya Hai!</b>\n\n👤 Name: {first_name or username}\n🆔 User ID: <code>{chat_id}</code>\n\n📋 Pending Requests me check karo."
-    kb = [[{"text": "📋 View Pending", "callback_data": "pending_requests"}]]
+    kb = [[{"text": "📋 View Pending", "callback_data": "pending_requests", "style": "primary"}]]
     await send(SUPER_ADMIN_ID, text, keyboard=kb)
     for admin_id in ADMIN_CHAT_IDS:
         await send(admin_id, text, keyboard=kb)
