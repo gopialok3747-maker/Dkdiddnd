@@ -1,0 +1,6 @@
+{
+  "Panel_01": {
+    "url": "https://yourpanel.firebaseio.com",
+    "key": "your_auth_key"
+  }
+}
